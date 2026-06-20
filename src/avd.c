@@ -1,200 +1,25 @@
 #include "avd.h"
 
-void handler(void)
-{
-  u32 ipsr, val;
-  __asm volatile("mrs %0, ipsr" : "=r"(ipsr));
-  u32 irq_num = ipsr & 0x1ff;
-
-  val = 0x10000 | (irq_num < 16 ? 1000 + irq_num : irq_num - 16);
-
-  reg_write(CM3_MBOX1_TX, val);
-
-  while (1)
-    __asm volatile("wfi");
-}
-
-void nmi(void) __attribute__((weak, alias("handler")));
-void hardfault(void) __attribute__((weak, alias("handler")));
-void memmanage(void) __attribute__((weak, alias("handler")));
-void busfault(void) __attribute__((weak, alias("handler")));
-void usagefault(void) __attribute__((weak, alias("handler")));
-void svcall(void) __attribute__((weak, alias("handler")));
-void pendsv(void) __attribute__((weak, alias("handler")));
-void systick(void) __attribute__((weak, alias("handler")));
-
-#define IRQ(n) \
-	void irq##n(void) __attribute__((weak, alias("handler")));
-	IRQ(0) IRQ(1) IRQ(2)
-
-	IRQ(3) IRQ(4) IRQ(5) IRQ(6) IRQ(7) IRQ(8) IRQ(9) IRQ(10)
-	IRQ(11) IRQ(12) IRQ(13) IRQ(14) IRQ(15) IRQ(16) IRQ(17)
-
-	/* IRQ(18) IRQ(19) IRQ(20) */ IRQ(21) IRQ(22)
-	/* IRQ(23) IRQ(24) IRQ(25) */ IRQ(26) IRQ(27)
-	/* IRQ(28) IRQ(29) IRQ(30) */ IRQ(31) IRQ(32)
-	/* IRQ(33) IRQ(34) IRQ(35) */ IRQ(36) IRQ(37)
-	/* IRQ(38) */ IRQ(39) /* IRQ(40) */ IRQ(41)
-
-	IRQ(42) IRQ(43) IRQ(44) IRQ(45) IRQ(46) IRQ(47)
-	IRQ(48) IRQ(49) IRQ(50) IRQ(51) IRQ(52) IRQ(53) IRQ(54)
-	IRQ(55) IRQ(56) IRQ(57) IRQ(58) IRQ(59) IRQ(60) IRQ(61)
-
-	/* IRQ( 62) */ IRQ(63) /* IRQ( 64) */ IRQ(65)
-
-	IRQ(66) IRQ(67) IRQ(68) IRQ(69) IRQ(70) IRQ(71)
-	IRQ(72) IRQ(73) IRQ(74) IRQ(75) IRQ(76) IRQ(77)
-
-	/* IRQ( 78) IRQ( 79) IRQ( 80) */ IRQ(81) IRQ(82)
-	/* IRQ( 83) IRQ( 84) IRQ( 85) */ IRQ(86) IRQ(87)
-	/* IRQ( 88) IRQ( 89) IRQ( 90) */ IRQ(91) IRQ(92)
-	/* IRQ( 93) IRQ( 94) IRQ( 95) */ IRQ(96) IRQ(97)
-	/* IRQ( 98) IRQ( 99) IRQ(100) */ IRQ(101) IRQ(102)
-	/* IRQ(103) IRQ(104) IRQ(105) */ IRQ(106) IRQ(107)
-	/* IRQ(108) IRQ(109) IRQ(110) */ IRQ(111) IRQ(112)
-	/* IRQ(113) IRQ(114) IRQ(115) */ IRQ(116) IRQ(117)
-	/* IRQ(118) IRQ(119) IRQ(120) */ IRQ(121) IRQ(122)
-
-	/* IRQ(123) IRQ(124) IRQ(125) */ IRQ(126) IRQ(127)
-	/* IRQ(128) IRQ(129) IRQ(130) */ IRQ(131) IRQ(132)
-	/* IRQ(133) IRQ(134) IRQ(135) */ IRQ(136) IRQ(137)
-	IRQ(138) IRQ(139) IRQ(140)
-#undef IRQ
-
-void clear(unsigned int n, unsigned int status) {
-	volatile u32 *reg = DECODE_STATUS(n);
-#if AVD_VER == 2
-	/* packed into one register each status is shifted 5 up */
-	reg_write(reg, status << (n * 5));
-	while (reg_read(reg) & (status << (n * 5)));
-#else
-	reg_write(reg, status);
-	while (reg_read(reg) & status);
-#endif
-}
-
-
-static void vpdone(u32 n)
-{
-	clear(n, DECODE_STATUS_DONE);
-	reg_write(CM3_MBOX1_TX, 0x100 | n);
-}
-
-static void err(u32 n)
-{
-	clear(n, DECODE_STATUS_ERR);
-	reg_write(CM3_MBOX1_TX, n);
-}
-
-static void ppdone(u32 n)
-{
-	clear(n, DECODE_STATUS_DONE);
-	reg_write(CM3_MBOX1_TX, 0x1000);
-}
-
-#define irq(n) void irq##n(void)
-
-#define unk(n, idx) irq(n) { clear(idx, DECODE_STATUS_UNK); }
-#define error(n, idx) irq(n) { err(idx); }
-#define vdone(n, idx) irq(n) { vpdone(idx); }
-
-/* AVD_VER 2? */
-void irq38(void) { clear(IRQ_SUBMIT, DECODE_STATUS_UNK); }
-void irq40(void) { ppdone(IRQ_SUBMIT); }
-
-unk(18, 0)
-error(19, 0)
-vdone(20, 0)
-
-unk(23, 0)
-error(24, 0)
-vdone(25, 0)
-
-unk(28, 0)
-error(29, 0)
-vdone(30, 0)
-
-unk(33, 0)
-error(34, 0)
-vdone(35, 0)
-
-/* AVD_VER 3+ */
-void irq62(void) { clear(IRQ_SUBMIT, DECODE_STATUS_UNK); }
-void irq64(void) { ppdone(IRQ_SUBMIT); }
-
-unk(78, 0)
-error(79, 0)
-vdone(80, 0)
-
-unk(83, 1)
-error(84, 1)
-vdone(85, 1)
-
-unk(88, 2)
-error(89, 2)
-vdone(90, 2)
-
-unk(93, 3)
-error(94, 3)
-vdone(95, 3)
-
-unk(98, 4)
-error(99, 4)
-vdone(100, 4)
-
-unk(103, 5)
-error(104, 5)
-vdone(105, 5)
-
-unk(108, 6)
-error(109, 6)
-vdone(110, 6)
-
-unk(113, 7)
-error(114, 7)
-vdone(115, 7)
-
-unk(118, 8)
-error(119, 8)
-vdone(120, 8)
-
-unk(123, 9)
-error(124, 9)
-vdone(125, 9)
-
-unk(128, 10)
-error(129, 10)
-vdone(130, 10)
-
-unk(133, 11)
-error(134, 11)
-vdone(135, 11)
-
-#undef irq
-#undef unk
-#undef error
-#undef vdone
-
 extern void _start(void);
 
 __attribute__((section(".vectors"), used))
 static void (*const vector_table[])(void) = {
 	(void *)SP,
 	_start,
-	nmi,
-	hardfault,
-	memmanage,
-	busfault,
-	usagefault,
+	irq_nmi,
+	irq_hardfault,
+	irq_memmanage,
+	irq_busfault,
+	irq_usagefault,
 	0,
 	0,
 	0,
 	0,
-	svcall,
+	irq_svcall,
 	0,
 	0,
-	pendsv,
-	systick,
+	irq_pendsv,
+	irq_systick,
 
 	irq0, irq1, irq2, irq3, irq4, irq5, irq6, irq7, irq8, irq9, irq10, irq11,
 	irq12, irq13, irq14, irq15, irq16, irq17, irq18, irq19, irq20, irq21,

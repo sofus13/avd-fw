@@ -28,7 +28,7 @@ CFLAGS = -Wall -O2 -nostdlib \
 
 NAME = avd-fw-v$(AVD_VER)-t$(AVD_TIER)
 
-OBJECTS := util.o avd.o
+OBJECTS := util.o irq.o avd.o
 
 BUILD_OBJS := $(patsubst %,build/%,$(OBJECTS))
 
