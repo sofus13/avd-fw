@@ -1,8 +1,6 @@
 #include "tunable/tunable.h"
+#include "util.h"
 
-typedef volatile unsigned int u32;
-
-#define BIT(nr) (1 << (nr))
 #define REG(addr) ((u32 *)(addr))
 
 #if AVD_VER == 2
