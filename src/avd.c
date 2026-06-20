@@ -1,73 +1,6 @@
 #include "avd.h"
 #include "tunable/tunable.h"
 
-#define REG(addr) ((u32 *)(addr))
-
-#if AVD_VER == 2
-#define SP 0x1000c000
-#elif AVD_VER == 3
-#define SP 0x10010000
-#elif AVD_VER == 5 && TIER == 0
-#define SP 0x10010000
-#else
-#define SP 0x10012000
-#endif
-
-#define NVIC_ISER REG(0xe000e100)
-
-#define MBOX_BASE 0x50010000
-
-/* thanks to https://github.com/ArcaneNibble/m1n1.git */
-#define MBOX_IRQ_ENABLE_0 REG(MBOX_BASE + 0x10)
-
-#define MBOX_IRQ_CLEAR_0 REG(MBOX_BASE + 0x2c)
-
-#define MBOX0_STATUS REG(MBOX_BASE + 0x50)
-#define MBOX0_SUBMIT REG(MBOX_BASE + 0x54)
-#define MBOX0_RETRIEVE REG(MBOX_BASE + 0x58)
-
-#define MBOX1_STATUS REG(MBOX_BASE + 0x5c)
-#define MBOX1_SUBMIT REG(MBOX_BASE + 0x60)
-#define MBOX1_RETRIEVE REG(MBOX_BASE + 0x64)
-
-/* used to signal boot */
-#define MBOX_FLAG_0 REG(MBOX_BASE + 0x90)
-
-#define MBOX0_EMPTY BIT(0)
-#define MBOX0_NOT_EMPTY BIT(1)
-
-#define MBOX1_EMPTY BIT(2)
-#define MBOX1_NOT_EMPTY BIT(3)
-
-#if AVD_VER == 2
-#define VP_OFFSET 0x60
-#define SUBMIT_NUMBER 5
-#elif AVD_VER == 3
-#define VP_OFFSET 0x124
-#define SUBMIT_NUMBER 9
-#else
-#define VP_OFFSET 0x194
-#define SUBMIT_NUMBER 13
-#endif
-
-#if AVD_VER < 4
-#define DECODE_CTRL_BASE 0x40100000
-#else
-#define DECODE_CTRL_BASE 0x41100000
-#endif
-
-#if AVD_VER == 2
-/* everything is packed into one register */
-#define DECODE_STATUS(n) REG(DECODE_CTRL_BASE + VP_OFFSET)
-#else
-#define DECODE_STATUS(n) REG(DECODE_CTRL_BASE + VP_OFFSET + (n * 4))
-#endif
-
-#define DECODE_STATUS_UNK BIT(0)
-#define DECODE_STATUS_ERROR BIT(1)
-#define DECODE_STATUS_DONE BIT(2)
-#define DECODE_STATUS_FULL BIT(3)
-
 void handler(void)
 {
   u32 ipsr, val;
@@ -76,7 +9,7 @@ void handler(void)
 
   val = 0x10000 | (irq_num < 16 ? 1000 + irq_num : irq_num - 16);
 
-  reg_write(MBOX1_SUBMIT, val);
+  reg_write(CM3_MBOX1_TX, val);
 
   while (1)
     __asm volatile("wfi");
@@ -145,19 +78,19 @@ void clear(unsigned int n, unsigned int status) {
 static void vpdone(u32 n)
 {
 	clear(n, DECODE_STATUS_DONE);
-	reg_write(MBOX1_SUBMIT, 0x100 | n);
+	reg_write(CM3_MBOX1_TX, 0x100 | n);
 }
 
 static void err(u32 n)
 {
-	clear(n, DECODE_STATUS_ERROR);
-	reg_write(MBOX1_SUBMIT, n);
+	clear(n, DECODE_STATUS_ERR);
+	reg_write(CM3_MBOX1_TX, n);
 }
 
 static void ppdone(u32 n)
 {
 	clear(n, DECODE_STATUS_DONE);
-	reg_write(MBOX1_SUBMIT, 0x1000);
+	reg_write(CM3_MBOX1_TX, 0x1000);
 }
 
 #define irq(n) void irq##n(void)
@@ -167,8 +100,8 @@ static void ppdone(u32 n)
 #define vdone(n, idx) irq(n) { vpdone(idx); }
 
 /* AVD_VER 2? */
-void irq38(void) { clear(SUBMIT_NUMBER, DECODE_STATUS_UNK); }
-void irq40(void) { ppdone(SUBMIT_NUMBER); }
+void irq38(void) { clear(IRQ_SUBMIT, DECODE_STATUS_UNK); }
+void irq40(void) { ppdone(IRQ_SUBMIT); }
 
 unk(18, 0)
 error(19, 0)
@@ -187,8 +120,8 @@ error(34, 0)
 vdone(35, 0)
 
 /* AVD_VER 3+ */
-void irq62(void) { clear(SUBMIT_NUMBER, DECODE_STATUS_UNK); }
-void irq64(void) { ppdone(SUBMIT_NUMBER); }
+void irq62(void) { clear(IRQ_SUBMIT, DECODE_STATUS_UNK); }
+void irq64(void) { ppdone(IRQ_SUBMIT); }
 
 unk(78, 0)
 error(79, 0)
@@ -286,11 +219,11 @@ void tunable_apply(const struct tunable *tunable)
 	for (int i = 0; i < tunable->sz; ++i) {
 		u32 val, old_val;
 
-		old_val = reg_read(REG(DECODE_CTRL_BASE) + tunable->values[i].offset);
+		old_val = reg_read(DECODE_CTRL_BASE + tunable->values[i].offset);
 		val = old_val & ~tunable->values[i].mask;
 		val |= tunable->values[i].value;
 		/* always write */
-		reg_write(REG(DECODE_CTRL_BASE) + tunable->values[i].offset, val);
+		reg_write(DECODE_CTRL_BASE + tunable->values[i].offset, val);
 	}
 }
 
@@ -299,11 +232,11 @@ void _start(void)
 	tunable_apply(&tunable);
 
 	for (int i = 0; i < 7; i++)
-		NVIC_ISER[i] = 0xffffffff;
+		CM3_NVIC_ISER[i] = 0xffffffff;
 
 	__asm volatile("cpsie i");
 
-	reg_write(MBOX_FLAG_0, 1);
+	reg_write(CM3_BOOT, 1);
 
 	while (1)
 		__asm volatile("wfi");
