@@ -11,7 +11,7 @@
 
 #define SP			0x1000c000
 #define VP_OFFSET		0x60
-#define IRQ_SUBMIT		5
+#define IRQ_SUBMIT		4
 
 #define DECODE_CTRL_BASE	0x40100000
 #define DECODE_STATUS(x)	REG(DECODE_CTRL_BASE + VP_OFFSET)
