@@ -1,0 +1,15 @@
+name: Build
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-26.04-arm
+    container: 
+    steps:
+    - uses: actions/checkout@v7
+    - name: Build
+      run: |
+        sudo apt-get install -y meson && PATH="/usr/lib/llvm-21/bin/:$PATH" meson setup --cross-file=./llvm.ini build && cd build/ && ninja && tar cJf avd-fw.tar.xz apple
+    - uses: actions/upload-artifact@v7
+      with:
+        archive: false
+        path: build/avd-fw.tar.xz
