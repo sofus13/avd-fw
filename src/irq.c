@@ -73,12 +73,15 @@ void irq_clear(u32 n, u32 status)
 static void vpdone(u32 n)
 {
 	irq_clear(n, DECODE_STATUS_DONE);
+	reg_write(REG(DECODE_CTRL_BASE + 0x30),
+			0x2b000000 | 0x200 | 0xf);
 	reg_write(CM3_MBOX1_TX, 0x100 | n);
 }
 
 static void err(u32 n)
 {
 	irq_clear(n, DECODE_STATUS_ERR);
+	reg_write(CM3_ERR, 1);
 	reg_write(CM3_MBOX1_TX, n);
 }
 
@@ -174,7 +177,7 @@ irq_unk(133, 11)
 irq_err(134, 11)
 irq_vdone(135, 11)
 
-IRQ(0) IRQ(1) IRQ(2) IRQ(3)
+IRQ(0) IRQ(2) IRQ(3)
 
 IRQ(4) IRQ(5) IRQ(6) IRQ(7)
 IRQ(8) IRQ(9) IRQ(10) IRQ(11)

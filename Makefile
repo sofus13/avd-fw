@@ -31,7 +31,7 @@ LAST_BUILT := $(shell echo "$(CFLAGS)" | cmp -s .flags || echo "$(CFLAGS)" > .fl
 
 NAME = avd-fw-v$(AVD_VER)-t$(AVD_TIER)
 
-OBJECTS := util.o irq.o avd.o
+OBJECTS := util.o irq.o avd.o piodma.o
 
 BUILD_OBJS := $(patsubst %,build/%,$(OBJECTS))
 

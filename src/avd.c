@@ -1,4 +1,7 @@
 #include "avd.h"
+#include "hw/reg/reg_common.h"
+#include "piodma.h"
+#include "memmap.h"
 
 extern void _start(void);
 
@@ -57,6 +60,79 @@ void apply_tunables()
 	}
 }
 
+void irq1(void)
+{
+	u32 off_lo;
+	u32 off_hi;
+	u32 size;
+	u32 insn_iova_hi;
+	u32 insn_iova_lo;
+	/* empty the mailbox, BIT(17) = EMPTY
+	 * how many messages can the mailbox store? */
+	while ((reg_read(CM3_MBOX0_STATUS) & BIT(17)) == 0) {
+		if (reg_read(CM3_ERR)) {
+			reg_write(CM3_MBOX_IRQEN_0, 0);
+			return;
+		}
+
+		/*
+		 * Driver does something like:
+		 *
+		 * piodma.cpu[1 + (transfer_size++)] = instruction;
+		 *
+		 * I thinks its weird we cant control the destination
+		 * might be different for other socs
+		 * piodma.cpu[0] = ((((transer_size - 2) * 4) << 16) | ((0x20000 | cm3_offset + 20) & 0x3fffc) | BIT(0));
+		 * avd_w32(sram, cm3_offset, piodma.addr & 0xffffffff);
+		 * avd_w32(sram, cm3_offset + 4, piodma.addr >> 32);
+		 * avd_w32(sram, cm3_offset + 8, transer_size * 4);
+		 * avd_w32(sram, cm3_offset + 12, inst.addr & 0xffffffff);
+		 * avd_w32(sram, cm3_offset + 16, inst.addr >> 32);
+		 * avd_w32(mbox, AVD_REG_MBOX0_SUBMIT, cm3_offset);
+		 *
+		 */
+
+		u32 off = reg_read(CM3_MBOX0_RX);
+
+		off_lo = reg_read(REG(CM3_SRAM_BASE + off));
+		off_hi = reg_read(REG(CM3_SRAM_BASE + off + 4));
+		size = reg_read(REG(CM3_SRAM_BASE + off + 8));
+		insn_iova_lo = reg_read(REG(CM3_SRAM_BASE + off + 12));
+		insn_iova_hi = reg_read(REG(CM3_SRAM_BASE + off + 16));
+
+		piodma_transfer(off_lo, off_hi, size);
+		/*
+		 * configure stream while we wait for piodma to finish
+		 * (hardcoded for t6020 and vp 4)
+		 */
+		reg_write(REG(DECODE_CTRL_BASE + 0x30c), insn_iova_hi);
+		reg_write(REG(DECODE_CTRL_BASE + 0x150), insn_iova_lo);
+		reg_write(REG(DECODE_CTRL_BASE + 0x18c), 0);
+		reg_write(REG(DECODE_CTRL_BASE + 0x1c8), 0);
+		reg_write(REG(DECODE_CTRL_BASE + 0x204), 0);
+		reg_write(REG(DECODE_CTRL_BASE + 0x0fc + 4 * 4),
+				DECODE_STATUS_UNK | DECODE_STATUS_ERR | DECODE_STATUS_DONE);
+		reg_write(REG(DECODE_CTRL_BASE + 0x120),
+				DECODE_STATUS_UNK | DECODE_STATUS_DONE);
+
+		while (reg_read(CM3_PIODMA_STATUS) & CM3_PIODMA_STATUS_BUSY);
+
+		/*
+		 * write all instructions
+		 *
+		 * this breaks on multi slice
+		 * i think apples solution, is to do a piodma transfer for each slice
+		 * and hope the vp is done when the piodma is done??
+		 * */
+		for (int i = 0; i < (size / 4) - 1; i++)
+			reg_write(REG(DECODE_CTRL_BASE + 0xc + (4 * 4)),
+					reg_read(REG(CM3_SRAM_BASE + off + 20 + (i * 4))));
+
+	}
+
+	reg_write(CM3_MBOX_IRQCLR_0, CM3_MBOX0_NOT_EMPTY);
+}
+
 void _start(void)
 {
 	apply_tunables();
@@ -65,6 +141,8 @@ void _start(void)
 		CM3_NVIC_ISER[i] = 0xffffffff;
 
 	__asm volatile("cpsie i");
+
+	reg_write(CM3_MBOX_IRQEN_0, CM3_MBOX0_NOT_EMPTY);
 
 	reg_write(CM3_BOOT, 1);
 
