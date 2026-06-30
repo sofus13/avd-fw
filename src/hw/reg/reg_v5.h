@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #ifndef __REG_V5_H__
 #define __REG_V5_H__
 

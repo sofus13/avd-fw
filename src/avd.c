@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include "avd.h"
 
 extern void _start(void);

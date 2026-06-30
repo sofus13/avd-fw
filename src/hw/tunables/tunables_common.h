@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #ifndef __TUNABLES_COMMON_H__
 #define __TUNABLES_COMMON_H__
 

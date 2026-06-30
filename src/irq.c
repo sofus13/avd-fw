@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #include "irq.h"
 
 void irq_handler(void)

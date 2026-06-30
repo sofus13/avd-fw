@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #ifndef __AVD_H__
 #define __AVD_H__
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 #ifndef __TUNABLES_V5T2_H__
 #define __TUNABLES_V5T2_H__
 
